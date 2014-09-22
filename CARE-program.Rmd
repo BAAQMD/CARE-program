@@ -2,6 +2,7 @@
 suppressPackageStartupMessages({
   library(rgdal)
   library(devtools)
+  library(jsonlite)
   })
 
 source_gist("1f2c85ea647435e5719e") # helper function: cached()
@@ -10,72 +11,21 @@ source_gist("9f6758bf974cd265bdd8") # helper function: extract_layer()
 source_gist("00afc2e5cf6b9628dec8") # helper function: write_geojson()
 
 DATUM <- WGS84 <- CRS("+proj=longlat +datum=WGS84")
-
-BASE_URL <- "http://www.baaqmd.gov/~/media/Files/Planning%20and%20Research/CARE%20Program/Documents"
+CARE_DOCUMENTS_URL <- "http://www.baaqmd.gov/~/media/Files/Planning%20and%20Research/CARE%20Program/Documents"
 ```
 
-```{r extract_layer}
-extract_layer <- function (
-  dsn, 
-  layer, 
-  datum, 
-  quiet = FALSE, 
-  ...
-) {
-  require(rgdal)
-  if (missing(layer)) {
-    layer <- ogrListLayers(dsn)
-    stopifnot(length(layer) == 1)
-  }
-  msg <- capture.output(spobj <- readOGR(dsn, layer, ...))
-  if (!quiet) {
-    message("Extracting layer ", layer, " from ", dsn)
-    message(str_c(msg, "\n"))
-    message(str(spobj@data))
-  }
-  if (!missing(datum)) {
-    spobj <- spTransform(spobj, datum)
-  }
-  return(spobj)
-}
-```
-
-```{r unzip_url}
-unzip_url <- function (
-  url, 
-  exdir, 
-  zipfile = basename(url), 
-  keep_zipfile = TRUE, 
-  quiet = FALSE
-) {
-  require(httr)
-  if (missing(exdir)) {
-    # FIXME: platform-dependent
-    exdir <- with(parse_url(url), file.path(hostname, str_replace(path, ignore.case("\\.zip$"), ""))) 
-  }
-  zipfile <- file.path(exdir, zipfile)
-  if (!file.exists(zipfile)) {
-    if (!file.exists(exdir)) {
-      dir.create(exdir, recursive = TRUE) 
-    }
-    if (!quiet) message("Downloading to ", zipfile)
-    download.file(url, zipfile)
-  }
-  if (!quiet) message("Unzipping into ", exdir)
-  contents <- unzip(zipfile, exdir = exdir)
-  if (!keep_zipfile) file.remove(zipfile)
-  return(invisible(exdir))
-}
-```
-
-```{r air_basins}
-CARE_zones <- extract_layer(
+```{r CARE_areas_2009}
+CARE_areas_2009 <- extract_layer(
   dsn = unzip_url(
-    file.path(BASE_URL, "2009CAREAreas/2009CAREAreas.ashx"), 
+    file.path(CARE_DOCUMENTS_URL, "2009CAREAreas/2009CAREAreas.ashx"), 
     exdir = "cache/2009_Impacted_Communities",
     zipfile = "2009CAREAreas.zip",
     keep_zipfile = TRUE),
   datum = WGS84)
-```
-message("Wrote contents to ", write_geojson(air_basins, dsn = "boundaries"))
+
+if (unique(CARE_areas_2009$ID) == "0") {
+  CARE_areas_2009$ID <- NULL
+}
+
+message("Wrote contents to ", write_geojson(CARE_areas_2009, dsn = "boundaries")) 
 ```
